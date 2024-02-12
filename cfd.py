@@ -1,86 +1,129 @@
-import numpy as np
-import matplotlib.pyplot as plt
+import pygame
+import pygame_gui
+import random
 
-class CFDModel:
-    def __init__(self, nx, ny, dx, dy, dt):
-        self.nx = nx  # Number of grid points in x-direction
-        self.ny = ny  # Number of grid points in y-direction
-        self.dx = dx  # Grid spacing in x-direction
-        self.dy = dy  # Grid spacing in y-direction
-        self.dt = dt  # Time step size
-        self.rho = 1.0  # Fluid density
+# Define some constants
+SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+PIPE_WIDTH, PIPE_HEIGHT = 100, SCREEN_HEIGHT
+PIPE_COLOR = (255, 255, 255)  # White
+BACKGROUND_COLOR = (0, 0, 0)  # Black
+WATER_COLOR = (0, 191, 255)  # Light blue
+MOLECULE_SIZE = 5  # Decrease the size of the molecules to pack them closer together
 
-        # Initialize velocity and pressure fields
-        self.u = np.zeros((nx, ny))  # x-velocity
-        self.v = np.zeros((nx, ny))  # y-velocity
-        self.p = np.zeros((nx, ny))  # pressure
+# Define the water molecule class
+class WaterMolecule(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((MOLECULE_SIZE, MOLECULE_SIZE), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, WATER_COLOR, (MOLECULE_SIZE // 2, MOLECULE_SIZE // 2), MOLECULE_SIZE // 2)
+        self.rect = self.image.get_rect()
+        self.rect.x = x + random.uniform(-1, 1) * MOLECULE_SIZE
+        self.rect.y = y + random.uniform(-1, 1) * MOLECULE_SIZE
+        self.speed = pygame.math.Vector2(0, 0)
 
-    def solve(self, num_steps):
-        for _ in range(num_steps):
-            # Perform one time step of the CFD simulation
-            self.calculate_velocity()
-            self.calculate_pressure()
-            self.update_velocity()
+    def update(self, pressure_force, viscosity, gravity):
+        self.speed.y += pressure_force + gravity  # Apply pressure force and gravity
+        self.speed *= viscosity  # Apply viscosity
+        self.rect.x += self.speed.x
+        self.rect.y += self.speed.y
 
-            # Visualize the velocity field
-            self.plot_velocity()
+        # Keep the molecule within the pipe
+        if self.rect.x < SCREEN_WIDTH / 2 - PIPE_WIDTH / 2:
+            self.rect.x = SCREEN_WIDTH / 2 - PIPE_WIDTH / 2
+        elif self.rect.x > SCREEN_WIDTH / 2 + PIPE_WIDTH / 2 - self.rect.width:
+            self.rect.x = SCREEN_WIDTH / 2 + PIPE_WIDTH / 2 - self.rect.width
 
-    def calculate_velocity(self):
-        # Implement the velocity calculation using the Navier-Stokes equations
-        for i in range(1, self.nx - 1):
-            for j in range(1, self.ny - 1):
-                self.u[i, j] = self.u[i, j] + self.dt * (
-                    -self.u[i, j] * (self.u[i, j] - self.u[i - 1, j]) / self.dx
-                    - self.v[i, j] * (self.u[i, j] - self.u[i, j - 1]) / self.dy
-                )
-                self.v[i, j] = self.v[i, j] + self.dt * (
-                    -self.u[i, j] * (self.v[i, j] - self.v[i - 1, j]) / self.dx
-                    - self.v[i, j] * (self.v[i, j] - self.v[i, j - 1]) / self.dy
-                )
+        # Remove the molecule if it reaches the bottom of the screen
+        if self.rect.y > SCREEN_HEIGHT:
+            self.kill()
 
-    def calculate_pressure(self):
-        # Implement the pressure calculation using the Poisson equation
-        self.p[1:-1, 1:-1] = (
-            ((self.p[2:, 1:-1] + self.p[:-2, 1:-1]) * self.dy**2
-            + (self.p[1:-1, 2:] + self.p[1:-1, :-2]) * self.dx**2)
-            / (2 * (self.dx**2 + self.dy**2))
-            - self.rho * self.dx**2 * self.dy**2 / (2 * (self.dx**2 + self.dy**2))
-            * (self.u[2:, 1:-1] - self.u[:-2, 1:-1]) / self.dx
-            * (self.v[1:-1, 2:] - self.v[1:-1, :-2]) / self.dy
-        )
+# Initialize Pygame and create a window
+pygame.init()
+pygame.display.set_caption('Water Simulation')
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
-    def update_velocity(self):
-        # Implement the velocity update using the pressure correction
-        self.u[1:-1, 1:-1] = self.u[1:-1, 1:-1] - self.dt * (
-            (self.p[2:, 1:-1] - self.p[:-2, 1:-1]) / (2 * self.dx)
-            - self.rho * (self.p[1:-1, 2:] - self.p[1:-1, :-2]) / (2 * self.dy)
-        )
-        self.v[1:-1, 1:-1] = self.v[1:-1, 1:-1] - self.dt * (
-            (self.p[1:-1, 2:] - self.p[1:-1, :-2]) / (2 * self.dy)
-            - self.rho * (self.p[2:, 1:-1] - self.p[:-2, 1:-1]) / (2 * self.dx)
-        )
+# Create a group to hold the water molecules
+water_molecules = pygame.sprite.Group()
 
-    def plot_velocity(self):
-        # Plot the velocity field
-        x = np.arange(0, self.nx) * self.dx
-        y = np.arange(0, self.ny) * self.dy
-        X, Y = np.meshgrid(x, y)
+# Create a clock to control the frame rate
+clock = pygame.time.Clock()
 
-        plt.figure()
-        plt.quiver(X, Y, self.u, self.v)
-        plt.xlabel('x')
-        plt.ylabel('y')
-        plt.title('Velocity Field')
-        plt.show()
-        plt.close()  # Close the figure to prevent accumulation of open figures
+# Create a GUI manager
+manager = pygame_gui.UIManager((SCREEN_WIDTH, SCREEN_HEIGHT))
 
-if __name__ == "__main__":
-    nx = 10  # Number of grid points in x-direction
-    ny = 10  # Number of grid points in y-direction
-    dx = 1.0  # Grid spacing in x-direction
-    dy = 1.0  # Grid spacing in y-direction
-    dt = 0.1  # Time step size
-    num_steps = 100  # Number of simulation steps
+# Initialize the slider variables
+PRESSURE_FORCE = 0.1
+VISCOSITY = 0.99
+GRAVITY = 0.1  # Initialize the gravity variable
 
-    model = CFDModel(nx, ny, dx, dy, dt)
-    model.solve(num_steps)
+# Create sliders for pressure force, viscosity and gravity
+pressure_force_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((20, 70), (200, 20)),
+                                                               start_value=PRESSURE_FORCE,
+                                                               value_range=(0.0, 1.0),
+                                                               manager=manager)
+viscosity_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((20, 120), (200, 20)),
+                                                          start_value=VISCOSITY,
+                                                          value_range=(0.9, 1.0),
+                                                          manager=manager)
+gravity_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((20, 170), (200, 20)),
+                                                        start_value=GRAVITY,
+                                                        value_range=(0.0, 1.0),
+                                                        manager=manager)  # Create a slider for gravity
+
+# Create labels for the sliders
+pressure_force_label = pygame_gui.elements.UILabel(relative_rect=pygame.Rect((20, 50), (200, 20)),
+                                                   text='Pressure Force',
+                                                   manager=manager)
+viscosity_label = pygame_gui.elements.UILabel(relative_rect=pygame.Rect((20, 100), (200, 20)),
+                                              text='Viscosity',
+                                              manager=manager)
+gravity_label = pygame_gui.elements.UILabel(relative_rect=pygame.Rect((20, 150), (200, 20)),
+                                            text='Gravity',
+                                            manager=manager)  # Create a label for gravity
+
+# Run the game loop
+running = True
+while running:
+    # Check for events
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.USEREVENT:
+            if event.user_type == pygame_gui.UI_HORIZONTAL_SLIDER_MOVED:
+                if event.ui_element == pressure_force_slider:
+                    PRESSURE_FORCE = event.value
+                elif event.ui_element == viscosity_slider:
+                    VISCOSITY = event.value
+                elif event.ui_element == gravity_slider:
+                    GRAVITY = event.value  # Update the gravity value when the slider is moved
+
+        manager.process_events(event)
+
+    # Add new water molecules at the top of the pipe
+    for _ in range(10):  # Add 10 molecules per frame
+        if len(water_molecules) < 5000:  # Increase the limit of molecules
+            x = random.uniform(SCREEN_WIDTH / 2 - PIPE_WIDTH / 2, SCREEN_WIDTH / 2 + PIPE_WIDTH / 2)
+            water_molecule = WaterMolecule(x, 0)
+            water_molecules.add(water_molecule)
+
+    # Update the water molecules
+    for molecule in water_molecules:
+        molecule.update(PRESSURE_FORCE, VISCOSITY, GRAVITY)  # Pass the gravity value to the update method
+
+    # Update the GUI
+    manager.update(pygame.time.get_ticks())
+
+    # Draw everything
+    screen.fill(BACKGROUND_COLOR)
+    pygame.draw.rect(screen, PIPE_COLOR, pygame.Rect(SCREEN_WIDTH / 2 - PIPE_WIDTH / 2, 0, PIPE_WIDTH, PIPE_HEIGHT), 2)
+    water_molecules.draw(screen)
+    manager.draw_ui(screen)
+
+    # Flip the display
+    pygame.display.flip()
+
+    # Cap the frame rate
+    clock.tick(60)
+
+# Quit Pygame
+pygame.quit()
