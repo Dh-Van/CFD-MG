@@ -38,108 +38,120 @@ class WaterMolecule(pygame.sprite.Sprite):
         if self.rect.y > SCREEN_HEIGHT:
             self.kill()
 
-# Initialize Pygame and create a window
-pygame.init()
-pygame.display.set_caption('Water Simulation')
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+class Simulation:
+    def __init__(self, pressure_force, viscosity, gravity):
+        self.pressure_force = pressure_force
+        self.viscosity = viscosity
+        self.gravity = gravity
+        self.water_molecules = pygame.sprite.Group()
 
-# Create a group to hold the water molecules
-water_molecules = pygame.sprite.Group()
+    def get_pressure_force(self):
+        return self.pressure_force
 
-# Create a clock to control the frame rate
-clock = pygame.time.Clock()
+    def set_pressure_force(self, pressure_force):
+        self.pressure_force = pressure_force
 
-# Create a GUI manager
-manager = pygame_gui.UIManager((SCREEN_WIDTH, SCREEN_HEIGHT))
+    def get_viscosity(self):
+        return self.viscosity
 
-# Initialize the slider variables
-PRESSURE_FORCE = 0.1
-VISCOSITY = 0.99
-GRAVITY = 0.1  # Initialize the gravity variable
+    def set_viscosity(self, viscosity):
+        self.viscosity = viscosity
 
-# Initialize the target and current values for the parameters
-target_pressure_force = current_pressure_force = PRESSURE_FORCE
-target_viscosity = current_viscosity = VISCOSITY
-target_gravity = current_gravity = GRAVITY
+    def get_gravity(self):
+        return self.gravity
 
-# Create sliders for pressure force, viscosity and gravity
-pressure_force_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((20, 70), (200, 20)),
-                                                               start_value=PRESSURE_FORCE,
+    def set_gravity(self, gravity):
+        self.gravity = gravity
+
+    def add_molecule(self):
+        x = random.uniform(SCREEN_WIDTH / 2 - PIPE_WIDTH / 2, SCREEN_WIDTH / 2 + PIPE_WIDTH / 2)
+        y = 0
+        water_molecule = WaterMolecule(x, y)
+        self.water_molecules.add(water_molecule)
+
+    def update_molecules(self):
+        self.water_molecules.update(self.pressure_force, self.viscosity, self.gravity)
+
+    def draw_molecules(self, screen):
+        self.water_molecules.draw(screen)
+
+class GUI:
+    def __init__(self, manager, simulation):
+        self.manager = manager
+        self.simulation = simulation
+
+        # Create sliders for pressure force, viscosity and gravity
+        self.pressure_force_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((20, 70), (200, 20)),
+                                                               start_value=simulation.get_pressure_force(),
                                                                value_range=(0.0, 1.0),
                                                                manager=manager)
-viscosity_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((20, 120), (200, 20)),
-                                                          start_value=VISCOSITY,
+        self.viscosity_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((20, 120), (200, 20)),
+                                                          start_value=simulation.get_viscosity(),
                                                           value_range=(0.9, 1.0),
                                                           manager=manager)
-gravity_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((20, 170), (200, 20)),
-                                                        start_value=GRAVITY,
-                                                        value_range=(0.0, 1.0),
-                                                        manager=manager)  # Create a slider for gravity
+        self.gravity_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((20, 170), (200, 20)),
+                                                        start_value=simulation.get_gravity(),
+                                                        value_range=(0.0, 0.5),
+                                                        manager=manager)
 
-# Create labels for the sliders
-pressure_force_label = pygame_gui.elements.UILabel(relative_rect=pygame.Rect((20, 50), (200, 20)),
+        # Create labels for the sliders
+        self.pressure_force_label = pygame_gui.elements.UILabel(relative_rect=pygame.Rect((20, 50), (200, 20)),
                                                    text='Pressure Force',
                                                    manager=manager)
-viscosity_label = pygame_gui.elements.UILabel(relative_rect=pygame.Rect((20, 100), (200, 20)),
+        self.viscosity_label = pygame_gui.elements.UILabel(relative_rect=pygame.Rect((20, 100), (200, 20)),
                                               text='Viscosity',
                                               manager=manager)
-gravity_label = pygame_gui.elements.UILabel(relative_rect=pygame.Rect((20, 150), (200, 20)),
+        self.gravity_label = pygame_gui.elements.UILabel(relative_rect=pygame.Rect((20, 150), (200, 20)),
                                             text='Gravity',
-                                            manager=manager)  # Create a label for gravity
+                                            manager=manager)
 
-# Run the game loop
-running = True
-while running:
-    # Check for events
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.USEREVENT:
+    def process_events(self, event):
+        if event.type == pygame.USEREVENT:
             if event.user_type == pygame_gui.UI_HORIZONTAL_SLIDER_MOVED:
-                if event.ui_element == pressure_force_slider:
-                    target_pressure_force = event.value
-                elif event.ui_element == viscosity_slider:
-                    target_viscosity = event.value
-                elif event.ui_element == gravity_slider:
-                    target_gravity = event.value
+                if event.ui_element == self.pressure_force_slider:
+                    self.simulation.set_pressure_force(self.pressure_force_slider.get_current_value())
+                elif event.ui_element == self.viscosity_slider:
+                    self.simulation.set_viscosity(self.viscosity_slider.get_current_value())
+                elif event.ui_element == self.gravity_slider:
+                    self.simulation.set_gravity(self.gravity_slider.get_current_value())
 
-        manager.process_events(event)
+def main():
+    pygame.init()
 
-    # Gradually move the current values towards the target values
-    current_pressure_force += (target_pressure_force - current_pressure_force) * 0.1
-    current_viscosity += (target_viscosity - current_viscosity) * 0.1
-    current_gravity += (target_gravity - current_gravity) * 0.1
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    clock = pygame.time.Clock()
+    manager = pygame_gui.UIManager((SCREEN_WIDTH, SCREEN_HEIGHT))
 
-    # Calculate the rate at which new molecules should be created
-    creation_rate = 20 * (current_gravity + current_pressure_force) / (2 * current_viscosity)
+    simulation = Simulation(0.1, 0.99, 0.1)
+    gui = GUI(manager, simulation)
 
-    # Limit the creation rate to a reasonable range
-    creation_rate = min(max(int(creation_rate * 10), 1), 10)
+    running = True
+    while running:
+        time_delta = clock.tick(60) / 1000.0
 
-    # Add new water molecules at the top of the pipe
-    for _ in range(creation_rate):  # Add molecules based on the creation rate
-        if len(water_molecules) < 5000:  # Increase the limit of molecules
-            x = random.uniform(SCREEN_WIDTH / 2 - PIPE_WIDTH / 2, SCREEN_WIDTH / 2 + PIPE_WIDTH / 2)
-            water_molecule = WaterMolecule(x, 0)
-            water_molecules.add(water_molecule)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
-    # Update the water molecules
-    water_molecules.update(current_pressure_force, current_viscosity, current_gravity)  # Pass the gravity value to the update method
+            manager.process_events(event)
+            gui.process_events(event)
 
-    # Update the GUI
-    manager.update(pygame.time.get_ticks())
+        manager.update(time_delta)
 
-    # Draw everything
-    screen.fill(BACKGROUND_COLOR)
-    pygame.draw.rect(screen, PIPE_COLOR, pygame.Rect(SCREEN_WIDTH / 2 - PIPE_WIDTH / 2, 0, PIPE_WIDTH, PIPE_HEIGHT), 2)
-    water_molecules.draw(screen)
-    manager.draw_ui(screen)
+        screen.fill(BACKGROUND_COLOR)
+        pygame.draw.line(screen, PIPE_COLOR, (SCREEN_WIDTH / 2 - PIPE_WIDTH / 2, 0), (SCREEN_WIDTH / 2 - PIPE_WIDTH / 2, SCREEN_HEIGHT), 2)
+        pygame.draw.line(screen, PIPE_COLOR, (SCREEN_WIDTH / 2 + PIPE_WIDTH / 2, 0), (SCREEN_WIDTH / 2 + PIPE_WIDTH / 2, SCREEN_HEIGHT), 2)
 
-    # Flip the display
-    pygame.display.flip()
+        for _ in range(10):  # Add 10 molecules per frame
+            simulation.add_molecule()
+        simulation.update_molecules()
+        simulation.draw_molecules(screen)
 
-    # Cap the frame rate
-    clock.tick(60)
+        manager.draw_ui(screen)
 
-# Quit Pygame
-pygame.quit()
+        pygame.display.flip()
+
+    pygame.quit()
+
+if __name__ == '__main__':
+    main()
