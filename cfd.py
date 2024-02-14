@@ -6,11 +6,11 @@ import csv
 from tqdm import tqdm
 
 # Define some constants
-SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+SCREEN_WIDTH, SCREEN_HEIGHT = 1600, 900
 PIPE_WIDTH, PIPE_HEIGHT = 100, SCREEN_HEIGHT
 PIPE_COLOR = (255, 255, 255)  # White
 BACKGROUND_COLOR = (0, 0, 0)  # Black
-WATER_COLOR = (0, 191, 255)  # Light blue
+WATER_COLOR = (255, 0, 0)  # Light blue
 MOLECULE_SIZE = 5  # Decrease the size of the molecules to pack them closer together
 
 # Define the water molecule class
@@ -131,7 +131,8 @@ class GUI:
                     self.simulation.set_gravity(self.gravity_slider.get_current_value())
 
 class DataCollector:
-    def __init__(self, pressure_bounds, viscosity_bounds, gravity_bounds):
+    def __init__(self, file_name, pressure_bounds, viscosity_bounds, gravity_bounds):
+        self.file_name = file_name
         self.pressure_bounds = np.arange(pressure_bounds[0], pressure_bounds[1], 0.05)
         self.viscosity_bounds = np.arange(viscosity_bounds[0], viscosity_bounds[1], 0.05)
         self.gravity_bounds = np.arange(gravity_bounds[0], gravity_bounds[1], 0.05)
@@ -139,27 +140,35 @@ class DataCollector:
     def run_pressure_simulations(self, viscosity, gravity):
         for pressure in tqdm(self.pressure_bounds, desc="Pressure simulations"):
             simulation = Simulation(pressure, viscosity, gravity)
-            self.run_simulation(simulation, pressure, viscosity, gravity)
+            average_velocity = self.run_simulation(simulation, pressure, viscosity, gravity)
+            with open(self.file_name + ".csv", 'a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow([pressure, average_velocity])
 
     def run_viscosity_simulations(self, pressure, gravity):
         for viscosity in tqdm(self.viscosity_bounds, desc="Viscosity simulations"):
             simulation = Simulation(pressure, viscosity, gravity)
-            self.run_simulation(simulation, pressure, viscosity, gravity)
+            average_velocity = self.run_simulation(simulation, pressure, viscosity, gravity)
+            with open(self.file_name + ".csv", 'a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow([viscosity, average_velocity])
 
     def run_gravity_simulations(self, pressure, viscosity):
         for gravity in tqdm(self.gravity_bounds, desc="Gravity simulations"):
             simulation = Simulation(pressure, viscosity, gravity)
-            self.run_simulation(simulation, pressure, viscosity, gravity)
+            average_velocity = self.run_simulation(simulation, pressure, viscosity, gravity)
+            with open(self.file_name + ".csv", 'a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow([gravity, average_velocity])
 
     def run_simulation(self, simulation, pressure, viscosity, gravity):
         for _ in tqdm(range(400), desc="Simulation steps"):  # Run the simulation for 1000 steps
             simulation.add_molecule()
             simulation.update_molecules()
-        average_velocity = simulation.get_average_velocity()
-        self.write_to_csv(pressure, viscosity, gravity, average_velocity)
+        return simulation.get_average_velocity()
 
     def write_to_csv(self, pressure, viscosity, gravity, average_velocity):
-        with open('simulation_data.csv', 'a', newline='') as file:
+        with open(self.file_name + ".csv", 'a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow([pressure, viscosity, gravity, average_velocity])
 
@@ -204,10 +213,14 @@ class Main:
         pygame.quit()
 
     def collect_data(self, pressure_bounds, viscosity_bounds, gravity_bounds):
-        data_collector = DataCollector(pressure_bounds, viscosity_bounds, gravity_bounds)
-        data_collector.run_gravity_simulations(0.1, 0.5)
+        gravity = DataCollector("gravity", pressure_bounds, viscosity_bounds, gravity_bounds)
+        gravity.run_gravity_simulations(0.1, 0.5)
+        viscocity = DataCollector("viscocity", pressure_bounds, viscosity_bounds, gravity_bounds)
+        viscocity.run_viscosity_simulations(0.1, 0.5)
+        pressure = DataCollector("pressure", pressure_bounds, viscosity_bounds, gravity_bounds)
+        pressure.run_pressure_simulations(0.1, 0.5)
 
 if __name__ == '__main__':
    cfd = Main()
-#    cfd.run_simulation_gui()
-   cfd.collect_data((0.1, 0.5), (0.9, 1.0), (0.1, 0.5))
+   cfd.run_simulation_gui()
+#    cfd.collect_data((0, 1.0), (0, 1.0), (0, 1.0))
